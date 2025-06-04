@@ -1,0 +1,43 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+
+# Env / virtualenv
+.env
+.venv/
+venv/
+ENV/
+env.bak/
+env/
+
+# VS Code settings
+.vscode/
+
+# PyInstaller
+*.spec
+dist/
+build/
+
+# Playwright browser binaries
+playwright/.cache/
+.playwright/
+
+# Tkinter or GUI temp files
+*.log
+*.tmp
+
+# Screenshots output
+screenshots/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# VSCode / IDEs
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
