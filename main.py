@@ -1,4 +1,5 @@
 import os
+import time
 from pathlib import Path
 from urllib.parse import urlparse
 from datetime import datetime
@@ -13,17 +14,39 @@ def get_domain(url):
 
 def log(text_widget, message):
     text_widget.insert(tk.END, message + "\n")
-    text_widget.see(tk.END)  # Scroll to bottom
+    text_widget.see(tk.END)
 
 
 def save_screenshot(page, url, name, path, log_widget):
     try:
         log(log_widget, f"Loading: {url}")
-        page.goto(url, wait_until="load", timeout=90000)
-        log(log_widget, f"Loaded successfully: {url}")
+        page.goto(url, wait_until="load", timeout=120000)
+        page.wait_for_timeout(3000)
+
+        # Scroll down slowly to trigger lazy loading
+        page.evaluate("""
+            () => {
+                return new Promise(resolve => {
+                    let totalHeight = 0;
+                    const maxHeight = 4000;
+                    const distance = 300;
+                    const timer = setInterval(() => {
+                        window.scrollBy(0, distance);
+                        totalHeight += distance;
+                        if (totalHeight >= maxHeight || totalHeight >= document.body.scrollHeight) {
+                            clearInterval(timer);
+                            resolve();
+                        }
+                    }, 300);
+                });
+            }
+        """)
+        page.wait_for_timeout(2000)
+
         screenshot_path = os.path.join(path, name)
         page.screenshot(path=screenshot_path, full_page=True)
         log(log_widget, f"Screenshot saved: {screenshot_path}")
+        time.sleep(2)
     except PlaywrightTimeoutError:
         log(log_widget, f"[{url}] Timeout while loading the page.")
     except Exception as e:
@@ -31,7 +54,7 @@ def save_screenshot(page, url, name, path, log_widget):
 
 
 def run_screenshots(urls_raw, log_widget, progress_bar):
-    log_widget.delete(1.0, tk.END)  # Clear previous logs
+    log_widget.delete(1.0, tk.END)
     urls = [url.strip() for url in urls_raw.splitlines() if url.strip()]
     if not urls:
         messagebox.showerror("Input Error", "Please enter at least one Shopify store URL.")
@@ -46,7 +69,10 @@ def run_screenshots(urls_raw, log_widget, progress_bar):
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        context = browser.new_context()
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                       "(KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36"
+        )
         page = context.new_page()
 
         for index, url in enumerate(urls, start=1):
@@ -58,8 +84,8 @@ def run_screenshots(urls_raw, log_widget, progress_bar):
 
                 save_screenshot(page, url, "homepage.png", output_dir, log_widget)
 
-                # Category
-                page.goto(url, timeout=60000)
+                page.goto(url, timeout=120000)
+                page.wait_for_timeout(3000)
                 category_link = page.query_selector('a[href*="/collections/"]')
                 if category_link:
                     category_url = category_link.get_attribute('href')
@@ -67,8 +93,8 @@ def run_screenshots(urls_raw, log_widget, progress_bar):
                         category_url = url.rstrip("/") + category_url
                     save_screenshot(page, category_url, "category.png", output_dir, log_widget)
 
-                    # Product
-                    page.goto(category_url, timeout=60000)
+                    page.goto(category_url, timeout=120000)
+                    page.wait_for_timeout(3000)
                     product_link = page.query_selector('a[href*="/products/"]')
                     if product_link:
                         product_url = product_link.get_attribute('href')
@@ -84,10 +110,12 @@ def run_screenshots(urls_raw, log_widget, progress_bar):
             finally:
                 progress_bar["value"] = index
                 progress_bar.update()
+                time.sleep(2)  # delay before next domain
 
         browser.close()
 
     messagebox.showinfo("Done", f"All screenshots saved in '{output_root}'.")
+
 
 
 def start_gui():
