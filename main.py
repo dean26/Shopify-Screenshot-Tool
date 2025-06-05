@@ -1,5 +1,6 @@
 import os
 import time
+import threading
 from pathlib import Path
 from urllib.parse import urlparse
 from datetime import datetime
@@ -109,7 +110,6 @@ def run_screenshots(urls_raw, log_widget, progress_bar):
 
                 save_screenshot(page, url, "homepage.png", output_dir, log_widget)
 
-                page.goto(url, timeout=120000)
                 page.wait_for_timeout(3000)
                 category_link = page.query_selector('a[href*="/collections/"]')
                 if category_link:
@@ -120,7 +120,17 @@ def run_screenshots(urls_raw, log_widget, progress_bar):
 
                     page.goto(category_url, timeout=120000)
                     page.wait_for_timeout(3000)
-                    product_link = page.query_selector('a[href*="/products/"]')
+                    product_links = [
+                        el for el in page.query_selector_all('a[href*="/products/"]')
+                        if el.get_attribute('href') and len(el.get_attribute('href').rstrip('/').split('/')) > 2
+                    ]
+
+                    product_link = None
+                    if len(product_links) == 1:
+                        product_link = product_links[0]
+                    elif len(product_links) >= 2:
+                        product_link = product_links[1]
+                        
                     if product_link:
                         product_url = product_link.get_attribute('href')
                         if not product_url.startswith("http"):
@@ -140,8 +150,6 @@ def run_screenshots(urls_raw, log_widget, progress_bar):
         browser.close()
 
     messagebox.showinfo("Done", f"All screenshots saved in '{output_root}'.")
-
-
 
 def start_gui():
     window = tk.Tk()
@@ -165,7 +173,10 @@ def start_gui():
     run_button = tk.Button(
         window,
         text="Start Screenshots",
-        command=lambda: run_screenshots(url_text.get("1.0", tk.END), log_text, progress_bar)
+        command=lambda: threading.Thread(
+            target=run_screenshots,
+            args=(url_text.get("1.0", tk.END), log_text, progress_bar)
+        ).start()
     )
     run_button.pack(pady=(5, 10))
 
