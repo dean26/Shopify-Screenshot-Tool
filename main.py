@@ -43,6 +43,31 @@ def save_screenshot(page, url, name, path, log_widget):
         """)
         page.wait_for_timeout(2000)
 
+        # Scroll back to top
+        page.evaluate("window.scrollTo(0, 0)")
+        page.wait_for_timeout(1000)
+
+        page.evaluate("""
+            () => {
+                const allElements = Array.from(document.querySelectorAll('*'));
+                allElements.forEach(el => {
+                    const style = window.getComputedStyle(el);
+                    const zIndex = parseInt(style.zIndex);
+                    const classId = (el.className + ' ' + el.id).toLowerCase();
+
+                    const isFloating = style.position === 'fixed' || style.position === 'absolute';
+                    const isVisible = style.display !== 'none';
+                    const isHighZ = zIndex > 1000;
+                    const isCookie = classId.includes('cookie') || classId.includes('consent') ||
+                                     classId.includes('banner') || classId.includes('popup') || classId.includes('osano');
+
+                    if ((isFloating && isVisible && isHighZ) || isCookie) {
+                        el.remove();
+                    }
+                });
+            }
+        """)
+
         screenshot_path = os.path.join(path, name)
         page.screenshot(path=screenshot_path, full_page=True)
         log(log_widget, f"Screenshot saved: {screenshot_path}")
