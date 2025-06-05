@@ -18,7 +18,7 @@ def log(text_widget, message):
     text_widget.see(tk.END)
 
 
-def save_screenshot(page, url, name, path, log_widget):
+def save_screenshot(page, url, name, path, log_widget, progress_callback=None):
     try:
         log(log_widget, f"Loading: {url}")
         page.goto(url, wait_until="load", timeout=120000)
@@ -29,7 +29,7 @@ def save_screenshot(page, url, name, path, log_widget):
             () => {
                 return new Promise(resolve => {
                     let totalHeight = 0;
-                    const maxHeight = 4000;
+                    const maxHeight = 10000;
                     const distance = 300;
                     const timer = setInterval(() => {
                         window.scrollBy(0, distance);
@@ -72,6 +72,8 @@ def save_screenshot(page, url, name, path, log_widget):
         screenshot_path = os.path.join(path, name)
         page.screenshot(path=screenshot_path, full_page=True)
         log(log_widget, f"Screenshot saved: {screenshot_path}")
+        if progress_callback:
+            progress_callback()
         time.sleep(2)
     except PlaywrightTimeoutError:
         log(log_widget, f"[{url}] Timeout while loading the page.")
@@ -80,11 +82,20 @@ def save_screenshot(page, url, name, path, log_widget):
 
 
 def run_screenshots(urls_raw, log_widget, progress_bar):
+
     log_widget.delete(1.0, tk.END)
     urls = [url.strip() for url in urls_raw.splitlines() if url.strip()]
     if not urls:
         messagebox.showerror("Input Error", "Please enter at least one Shopify store URL.")
         return
+    
+    def increment_progress():
+        progress_bar["value"] += 1
+        progress_bar.update()
+
+    total_expected = len(urls) * 3
+    progress_bar["maximum"] = total_expected
+    progress_bar["value"] = 0
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     output_root = Path("screenshots") / timestamp
@@ -106,9 +117,10 @@ def run_screenshots(urls_raw, log_widget, progress_bar):
                 domain = get_domain(url)
                 output_dir = output_root / domain
                 output_dir.mkdir(parents=True, exist_ok=True)
+                log(log_widget, "----------------------------------")
                 log(log_widget, f"Processing store: {domain}")
 
-                save_screenshot(page, url, "homepage.png", output_dir, log_widget)
+                save_screenshot(page, url, "homepage.png", output_dir, log_widget, progress_callback=increment_progress)
 
                 page.wait_for_timeout(3000)
                 category_link = page.query_selector('a[href*="/collections/"]')
@@ -116,7 +128,7 @@ def run_screenshots(urls_raw, log_widget, progress_bar):
                     category_url = category_link.get_attribute('href')
                     if not category_url.startswith("http"):
                         category_url = url.rstrip("/") + category_url
-                    save_screenshot(page, category_url, "category.png", output_dir, log_widget)
+                    save_screenshot(page, category_url, "category.png", output_dir, log_widget, progress_callback=increment_progress)
 
                     page.goto(category_url, timeout=120000)
                     page.wait_for_timeout(3000)
@@ -135,7 +147,7 @@ def run_screenshots(urls_raw, log_widget, progress_bar):
                         product_url = product_link.get_attribute('href')
                         if not product_url.startswith("http"):
                             product_url = url.rstrip("/") + product_url
-                        save_screenshot(page, product_url, "product.png", output_dir, log_widget)
+                        save_screenshot(page, product_url, "product.png", output_dir, log_widget, progress_callback=increment_progress)
                     else:
                         log(log_widget, f"[{domain}] No product link found.")
                 else:
@@ -149,7 +161,8 @@ def run_screenshots(urls_raw, log_widget, progress_bar):
 
         browser.close()
 
-    messagebox.showinfo("Done", f"All screenshots saved in '{output_root}'.")
+    log(log_widget, "###########################")
+    log(log_widget, f"Done. All screenshots saved in '{output_root}'.")
 
 def start_gui():
     window = tk.Tk()
